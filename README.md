@@ -1,6 +1,6 @@
 ### Hi, I'm Ezequiel👋 👾
 
-## I'm a Fullstack Developer. I love javascript 😃 . I'm from 🇦🇷. I'm working at Donweb. I worked at Treggo.I worked at NCR.
+## I'm a Fullstack Developer. I love javascript 😃 . çI worked at Treggo.I worked at NCR.
 
 Here are some ideas to get you started:
 
@@ -20,6 +20,6 @@ Here are some ideas to get you started:
 
 [website]: https://ezequielfreiredev.web.app/
 [twitter]:https://twitter.com/flecherdev
-[instagram]: https://www.instagram.com/ezequielfreire007/
+[instagram]: https://www.instagram.com/flecherdev/
 [linkedin]: https://www.linkedin.com/in/ezequiel-alejandro-freire-6a061152/
 
