@@ -1,6 +1,6 @@
 ### Hi, I'm Ezequiel👋 👾
 
-## I'm a Fullstack Developer. I love javascript 😃 . I'm working at Acciona It. I worked at Donweb. I worked at Treggo.I worked at NCR.
+## I'm a Fullstack Developer. I love javascript 😃. I'm working at Accenture It. I worked at Acciona. I worked at Donweb. I worked at Treggo.I worked at NCR.
 
 Here are some ideas to get you started:
 
