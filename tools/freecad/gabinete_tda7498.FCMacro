@@ -1,0 +1,217 @@
+# -*- coding: utf-8 -*-
+"""
+Gabinete paramétrico para el módulo amplificador Bluetooth 5.0 TDA7498 2x100W
+(placa ~95 x 85 mm). Pensado para imprimir en Creality Ender-3 S1 Pro.
+
+Uso:
+  - FreeCAD GUI: Macro > Macros... > Ejecutar (o pegarlo en la consola Python)
+  - Vía MCP (freecad-mcp): Claude lo manda con la tool execute_code
+  - Headless: freecadcmd gabinete_tda7498.FCMacro
+
+Orientación (igual a la 2da imagen de referencia, vista desde arriba):
+  - "Frente" (Y máx) = borde con potenciómetro de volumen, jack AUX y TF card
+  - "Izquierda" (X = 0) = bornera de alimentación
+  - "Fondo" (Y = 0)     = borneras de parlantes OUTL / OUTR
+  Origen (0,0) = esquina trasera-izquierda de la PCB, Z = 0 = base del gabinete.
+
+TODAS las posiciones de componentes son estimadas desde la foto:
+MEDILAS CON CALIBRE Y CORREGÍ LOS PARÁMETROS ANTES DE IMPRIMIR.
+"""
+import os
+import FreeCAD as App
+import Part
+import Mesh
+import MeshPart
+
+V = App.Vector
+
+# ----------------------------------------------------------------------------
+# Parámetros (mm)
+# ----------------------------------------------------------------------------
+PCB_X = 95.0            # ancho de la PCB (borde de los jacks)
+PCB_Y = 85.0            # profundidad de la PCB
+PCB_T = 1.6             # espesor de la PCB
+HOLE_INSET = 3.5        # centro de los agujeros de montaje desde cada borde
+COMP_H = 28.0           # altura libre sobre la PCB (disipador + margen)
+
+CLR = 1.0               # holgura PCB <-> pared interior
+WALL = 2.4              # pared = 6 perímetros con pico de 0.4
+FLOOR = 2.0             # espesor de piso
+STANDOFF_H = 6.0        # altura de los separadores
+STANDOFF_D = 7.0        # diámetro de los separadores
+SCREW_HOLE_D = 2.6      # M3 autorroscante en plástico (4.0 si usás insertos térmicos)
+
+LID_T = 2.0             # espesor de la tapa
+LIP_H = 4.0             # altura del labio de encastre de la tapa
+LIP_W = 1.6             # ancho del labio
+FIT = 0.25              # holgura de encastre (FDM)
+
+# Componentes (X/Y en coordenadas de PCB, Z = altura del centro sobre la cara superior de la PCB)
+POT_X, POT_Z, POT_D = 24.0, 7.0, 9.0          # eje del potenciómetro (slot en U + lengüeta de tapa)
+AUX_X, AUX_Z, AUX_D = 46.5, 3.0, 8.0          # jack 3.5 mm
+TF_X, TF_W, TF_H = 72.5, 15.0, 3.5            # ranura de la micro SD (arranca en la cara de la PCB)
+PWR_Y, PWR_Z, PWR_D = 85.0 - 19.0, 8.0, 7.0   # cables de alimentación (pared izquierda)
+SPK_XS = (23.0, 72.5)                         # OUTL / OUTR (pared trasera)
+SPK_Z, SPK_W, SPK_H = 8.0, 12.0, 6.0          # ranuras para cables de parlantes
+
+# Ventilación sobre/debajo del disipador
+HS_X0, HS_X1 = 21.0, 76.0
+HS_Y0, HS_Y1 = 28.0, 56.0
+SLOT_W, SLOT_PITCH = 2.5, 5.0
+
+OUT_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else App.getUserAppDataDir()
+
+# ----------------------------------------------------------------------------
+# Derivados
+# ----------------------------------------------------------------------------
+IN_X0, IN_Y0 = -CLR, -CLR
+IN_X1, IN_Y1 = PCB_X + CLR, PCB_Y + CLR
+OUT_X0, OUT_Y0 = IN_X0 - WALL, IN_Y0 - WALL
+OUT_W = (IN_X1 - IN_X0) + 2 * WALL
+OUT_D = (IN_Y1 - IN_Y0) + 2 * WALL
+PCB_BOT = FLOOR + STANDOFF_H
+PCB_TOP = PCB_BOT + PCB_T
+BOX_H = PCB_TOP + COMP_H
+
+
+def box(x, y, z, dx, dy, dz):
+    return Part.makeBox(dx, dy, dz, V(x, y, z))
+
+
+def cyl_y(x, y, z, d, length):
+    """Cilindro con eje en Y, centrado en (x, z), desde y hacia +Y."""
+    return Part.makeCylinder(d / 2, length, V(x, y, z), V(0, 1, 0))
+
+
+def cyl_x(x, y, z, d, length):
+    return Part.makeCylinder(d / 2, length, V(x, y, z), V(1, 0, 0))
+
+
+def vent_slots(z, h):
+    cuts = []
+    x = HS_X0
+    while x + SLOT_W <= HS_X1:
+        cuts.append(box(x, HS_Y0, z, SLOT_W, HS_Y1 - HS_Y0, h))
+        x += SLOT_PITCH
+    return cuts
+
+
+def mount_holes():
+    return [(HOLE_INSET, HOLE_INSET), (PCB_X - HOLE_INSET, HOLE_INSET),
+            (HOLE_INSET, PCB_Y - HOLE_INSET), (PCB_X - HOLE_INSET, PCB_Y - HOLE_INSET)]
+
+
+# ----------------------------------------------------------------------------
+# Caja
+# ----------------------------------------------------------------------------
+def make_box():
+    shell = box(OUT_X0, OUT_Y0, 0, OUT_W, OUT_D, BOX_H)
+    shell = shell.cut(box(IN_X0, IN_Y0, FLOOR, IN_X1 - IN_X0, IN_Y1 - IN_Y0, BOX_H))
+
+    # Separadores con agujero para tornillo
+    for (hx, hy) in mount_holes():
+        post = Part.makeCylinder(STANDOFF_D / 2, STANDOFF_H, V(hx, hy, FLOOR))
+        shell = shell.fuse(post)
+        shell = shell.cut(Part.makeCylinder(SCREW_HOLE_D / 2, STANDOFF_H + FLOOR - 0.6, V(hx, hy, 0.6)))
+
+    cuts = []
+    front_y = IN_Y1 - 0.1
+    t = WALL + 0.2
+
+    # Potenciómetro: ranura en U abierta hacia arriba (la PCB entra desde arriba con el eje puesto)
+    pz = PCB_TOP + POT_Z
+    cuts.append(cyl_y(POT_X, front_y, pz, POT_D, t))
+    cuts.append(box(POT_X - POT_D / 2, front_y, pz, POT_D, t, BOX_H))
+
+    # Jack AUX
+    cuts.append(cyl_y(AUX_X, front_y, PCB_TOP + AUX_Z, AUX_D, t))
+
+    # Micro SD
+    cuts.append(box(TF_X - TF_W / 2, front_y, PCB_TOP - 0.5, TF_W, t, TF_H))
+
+    # Alimentación (pared izquierda)
+    cuts.append(cyl_x(OUT_X0 - 0.1, PWR_Y, PCB_TOP + PWR_Z, PWR_D, t))
+
+    # Parlantes (pared trasera)
+    for sx in SPK_XS:
+        cuts.append(box(sx - SPK_W / 2, OUT_Y0 - 0.1, PCB_TOP + SPK_Z - SPK_H / 2, SPK_W, t, SPK_H))
+
+    # Ventilación en el piso, debajo del disipador
+    cuts += vent_slots(-0.1, FLOOR + 0.2)
+
+    for c in cuts:
+        shell = shell.cut(c)
+    return shell.removeSplitter()
+
+
+# ----------------------------------------------------------------------------
+# Tapa (se imprime boca abajo: la cara superior va contra la cama)
+# Modelada en posición de montaje: apoya en Z = BOX_H
+# ----------------------------------------------------------------------------
+def make_lid():
+    lid = box(OUT_X0, OUT_Y0, BOX_H, OUT_W, OUT_D, LID_T)
+
+    # Labio que entra dentro de las paredes
+    lx0, ly0 = IN_X0 + FIT, IN_Y0 + FIT
+    lw, ld = (IN_X1 - IN_X0) - 2 * FIT, (IN_Y1 - IN_Y0) - 2 * FIT
+    lip = box(lx0, ly0, BOX_H - LIP_H, lw, ld, LIP_H)
+    lip = lip.cut(box(lx0 + LIP_W, ly0 + LIP_W, BOX_H - LIP_H - 0.1, lw - 2 * LIP_W, ld - 2 * LIP_W, LIP_H + 0.2))
+    lid = lid.fuse(lip)
+
+    # Lengüeta que cierra la ranura en U del potenciómetro
+    pz = PCB_TOP + POT_Z
+    tw = POT_D - 2 * FIT
+    tongue = box(POT_X - tw / 2, IN_Y1, pz, tw, WALL, BOX_H - pz)
+    tongue = tongue.cut(cyl_y(POT_X, IN_Y1 - 0.1, pz, POT_D, WALL + 0.2))
+    # el labio no debe tapar la ranura del pote
+    lid = lid.cut(box(POT_X - POT_D / 2 - 0.5, IN_Y1 - LIP_W - FIT - 0.1, BOX_H - LIP_H - 0.1, POT_D + 1, LIP_W + FIT + 0.2, LIP_H + 0.1))
+    lid = lid.fuse(tongue)
+
+    # Ventilación sobre el disipador
+    for c in vent_slots(BOX_H - 0.1, LID_T + 0.2):
+        lid = lid.cut(c)
+    return lid.removeSplitter()
+
+
+# ----------------------------------------------------------------------------
+# Construcción, documento y exportación
+# ----------------------------------------------------------------------------
+def export_stl(shape, path):
+    mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.05, AngularDeflection=0.2, Relative=False)
+    mesh.write(path)
+
+
+def main():
+    doc = App.newDocument("Gabinete_TDA7498")
+    caja = make_box()
+    tapa = make_lid()
+
+    for name, shp in (("Caja", caja), ("Tapa", tapa)):
+        obj = doc.addObject("Part::Feature", name)
+        obj.Shape = shp
+
+    # Tapa rotada 180° en X y apoyada en Z = 0, lista para el slicer
+    tapa_print = tapa.copy()
+    tapa_print.rotate(V(0, 0, BOX_H + LID_T / 2), V(1, 0, 0), 180)
+    tapa_print.translate(V(0, 0, -tapa_print.BoundBox.ZMin))
+
+    doc.recompute()
+    doc.saveAs(os.path.join(OUT_DIR, "gabinete_tda7498.FCStd"))
+    export_stl(caja, os.path.join(OUT_DIR, "tda7498_caja.stl"))
+    export_stl(tapa_print, os.path.join(OUT_DIR, "tda7498_tapa.stl"))
+
+    for name, shp in (("caja", caja), ("tapa", tapa)):
+        bb = shp.BoundBox
+        App.Console.PrintMessage(
+            "%s: %.1f x %.1f x %.1f mm, volumen %.1f cm3, válido=%s\n"
+            % (name, bb.XLength, bb.YLength, bb.ZLength, shp.Volume / 1000, shp.isValid()))
+    App.Console.PrintMessage("Archivos en: %s\n" % OUT_DIR)
+
+    if App.GuiUp:
+        import FreeCADGui as Gui
+        Gui.ActiveDocument.getObject("Tapa").Transparency = 60
+        Gui.SendMsgToActiveView("ViewFit")
+        Gui.activeDocument().activeView().viewIsometric()
+
+
+main()
